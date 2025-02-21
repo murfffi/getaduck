@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"errors"
 	"fmt"
-	"github.com/murfffi/getaduck/internal/sclerr"
 	"io"
 	"net/http"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/ansel1/merry/v2"
+
+	"github.com/murfffi/getaduck/internal/sclerr"
 )
 
 const (
@@ -46,23 +47,24 @@ type Spec struct {
 	Arch    string
 }
 
-func Do(spec Spec) error {
+func Do(spec Spec) (string, error) {
 	var err error
 	if spec.Version == LatestVersion {
 		spec.Version, err = getLatestVersionPath()
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 	path := getPath(spec)
 	tmpFile, err := fetchZip(path)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer func() {
 		_ = os.Remove(tmpFile)
 	}()
-	return extractOne(tmpFile, getEntryName(spec))
+	entryName := getEntryName(spec)
+	return entryName, extractOne(tmpFile, entryName)
 }
 
 func getLatestVersionPath() (string, error) {

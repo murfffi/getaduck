@@ -1,13 +1,20 @@
 package shell
 
 import (
-	"github.com/murfffi/getaduck/download"
 	"log"
+	"path/filepath"
+
+	"github.com/murfffi/getaduck/download"
 )
 
 func Run() {
-	err := download.Do(download.DefaultSpec())
+	outFileName, err := download.Do(download.DefaultSpec())
 	if err != nil {
 		log.Fatalf("download failed: %v", err)
 	}
+	absPath, err := filepath.Abs(outFileName)
+	if err != nil {
+		absPath = outFileName
+	}
+	log.Print("downloaded: ", absPath)
 }

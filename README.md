@@ -1,0 +1,2 @@
+# getaduck
+Download DuckDB releases

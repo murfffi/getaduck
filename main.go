@@ -1,6 +1,8 @@
 package main
 
-import "github.com/murfffi/getaduck/internal/shell"
+import (
+	"github.com/murfffi/getaduck/shell"
+)
 
 func main() {
 	shell.Run()

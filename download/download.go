@@ -2,12 +2,21 @@ package download
 
 import (
 	"archive/zip"
+	"errors"
 	"fmt"
+	"github.com/murfffi/getaduck/internal/sclerr"
 	"io"
 	"net/http"
 	"os"
+	"runtime"
+	"strings"
 
 	"github.com/ansel1/merry/v2"
+)
+
+const (
+	LatestVersion      = "latest"
+	duckDbReleasesRoot = "https://github.com/duckdb/duckdb/releases"
 )
 
 type BinType int
@@ -27,7 +36,7 @@ func getPath(spec Spec) string {
 	default:
 		panic("unhandled spec type")
 	}
-	return fmt.Sprintf("https://github.com/duckdb/duckdb/releases/download/%s/%s-%s-%s.zip", spec.Version, archivePrefix, spec.OS, spec.Arch)
+	return fmt.Sprintf("%s/download/%s/%s-%s-%s.zip", duckDbReleasesRoot, spec.Version, archivePrefix, spec.OS, spec.Arch)
 }
 
 type Spec struct {
@@ -38,15 +47,55 @@ type Spec struct {
 }
 
 func Do(spec Spec) error {
+	var err error
+	if spec.Version == LatestVersion {
+		spec.Version, err = getLatestVersionPath()
+		if err != nil {
+			return err
+		}
+	}
 	path := getPath(spec)
 	tmpFile, err := fetchZip(path)
 	if err != nil {
 		return err
 	}
-	//defer func() {
-	//	_ = os.Remove(tmpFile)
-	//}()
+	defer func() {
+		_ = os.Remove(tmpFile)
+	}()
 	return extractOne(tmpFile, getEntryName(spec))
+}
+
+func getLatestVersionPath() (string, error) {
+	redirectErr := errors.New("redirect")
+	client := http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return redirectErr
+		},
+	}
+	const latestUrl = duckDbReleasesRoot + "/latest"
+	resp, err := client.Head(latestUrl)
+	if errors.Is(err, redirectErr) {
+		location := resp.Header.Get("Location")
+		prefix := duckDbReleasesRoot + "/tag/"
+		if !strings.HasPrefix(location, prefix) {
+			return "", fmt.Errorf("unexpected release redirect location: %s", location)
+		}
+		return location[len(prefix):], nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("HEAD failed for %s: %w", latestUrl, err)
+	}
+	_ = resp.Body.Close()
+	return "", fmt.Errorf("redirect expected for %s but got code %d", latestUrl, resp.StatusCode)
+}
+
+func DefaultSpec() Spec {
+	return Spec{
+		Type:    BinTypeDynLib,
+		Version: LatestVersion,
+		OS:      runtime.GOOS,
+		Arch:    runtime.GOARCH,
+	}
 }
 
 func extractOne(zipFile string, name string) error {
@@ -70,12 +119,12 @@ func extractFile(file *zip.File) error {
 	if err != nil {
 		return err
 	}
-	defer outFile.Close()
+	defer sclerr.CloseQuietly(outFile)
 	fileReader, err := file.Open()
 	if err != nil {
 		return err
 	}
-	defer fileReader.Close()
+	defer sclerr.CloseQuietly(fileReader)
 	_, err = io.Copy(outFile, fileReader)
 	return err
 }
@@ -116,12 +165,12 @@ func fetchZip(path string) (string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("failed to download %s: %d", path, resp.StatusCode)
 	}
-	defer resp.Body.Close()
+	defer sclerr.CloseQuietly(resp.Body)
 	tmpZip, err := os.CreateTemp("", "getaduck")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
-	defer tmpZip.Close()
+	defer sclerr.CloseQuietly(tmpZip)
 	_, err = io.Copy(tmpZip, resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("failed to download %s: %w", path, err)

@@ -1,0 +1,54 @@
+# This workflow will build a golang project
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: tests
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  go-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [1.23.x, 1.24.x]
+        
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5.3.0
+      with:
+        go-version: ${{ matrix.go-version }}
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -v -vet=all ./...
+
+  os-tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+        - "ubuntu-latest"
+        - "windows-latest"
+        - "macos-latest"
+        - "ubuntu-24.04-arm"
+        
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5.3.0
+      with:
+        go-version: "1.23"
+
+    - name: Test
+      run: go test -v ./...
+      

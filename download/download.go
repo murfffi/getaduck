@@ -48,12 +48,9 @@ type Spec struct {
 }
 
 func Do(spec Spec) (string, error) {
-	var err error
-	if spec.Version == LatestVersion {
-		spec.Version, err = getLatestVersionPath()
-		if err != nil {
-			return "", err
-		}
+	spec, err := normalizeSpec(spec)
+	if err != nil {
+		return "", err
 	}
 	path := getPath(spec)
 	tmpFile, err := fetchZip(path)
@@ -65,6 +62,33 @@ func Do(spec Spec) (string, error) {
 	}()
 	entryName := getEntryName(spec)
 	return entryName, extractOne(tmpFile, entryName)
+}
+
+func normalizeSpec(spec Spec) (Spec, error) {
+	spec.Arch = strings.ToLower(spec.Arch)
+	spec.OS = strings.ToLower(spec.OS)
+	spec.Version = strings.ToLower(spec.Version)
+
+	var err error
+	if spec.Version == LatestVersion {
+		spec.Version, err = getLatestVersionPath()
+		if err != nil {
+			return spec, err
+		}
+	}
+
+	if spec.OS == "darwin" {
+		spec.OS = "osx"
+	}
+
+	if spec.OS == "osx" {
+		spec.Arch = "universal"
+	}
+
+	if spec.Arch == "arm64" {
+		spec.Arch = "aarch64"
+	}
+	return spec, err
 }
 
 func getLatestVersionPath() (string, error) {
@@ -108,12 +132,21 @@ func extractOne(zipFile string, name string) error {
 	defer func() {
 		err = zipReader.Close()
 	}()
+	err = fmt.Errorf("did not find expected file %s in %+v", name, getNames(zipReader.File))
 	for _, file := range zipReader.File {
 		if file.Name == name {
 			err = extractFile(file)
 		}
 	}
 	return err
+}
+
+func getNames(files []*zip.File) []string {
+	names := make([]string, len(files))
+	for i, f := range files {
+		names[i] = f.Name
+	}
+	return names
 }
 
 func extractFile(file *zip.File) error {
@@ -146,6 +179,8 @@ func getDynLibName(targetOS string) string {
 	switch targetOS {
 	case "windows":
 		return "duckdb.dll"
+	case "osx": // uses name from normalizeSpec
+		return "libduckdb.dylib"
 	default:
 		return "libduckdb.so"
 	}

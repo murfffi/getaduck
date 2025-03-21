@@ -2,18 +2,24 @@
 package shell
 
 import (
+	"flag"
 	"log"
 	"path/filepath"
 
 	"github.com/murfffi/getaduck/download"
+	"github.com/murfffi/getaduck/internal/enumflag"
 )
 
-// Run executes getaduck
-func Run() {
-	spec := download.DefaultSpec()
+// RunArgs executes getaduck CLI
+func RunArgs(args []string, onError flag.ErrorHandling) error {
+	spec, err := parseSpec(args, onError)
+	if err != nil {
+		return err
+	}
+
 	res, err := download.Do(spec)
 	if err != nil {
-		log.Fatalf("download failed: %v", err)
+		return err
 	}
 	outFileName := res.OutputFile
 	absPath, err := filepath.Abs(outFileName)
@@ -21,4 +27,26 @@ func Run() {
 		absPath = outFileName
 	}
 	log.Print("downloaded: ", absPath)
+	return nil
+}
+
+func parseSpec(args []string, onError flag.ErrorHandling) (download.Spec, error) {
+	fs := flag.NewFlagSet(args[0], onError)
+	spec := download.DefaultSpec()
+
+	// order of args must match download.BinType const order
+	binType := enumflag.New("lib", "cli")
+	fs.Var(binType, "type", binType.Help("type of binary to download"))
+	version := fs.String("version", spec.Version, "DuckDB version")
+	binOS := fs.String("os", spec.OS, "target OS")
+	binArch := fs.String("arch", spec.Arch, "target architecture")
+	if err := fs.Parse(args[1:]); err != nil {
+		return download.Spec{}, err
+	}
+
+	spec.Type = download.BinType(binType.Index())
+	spec.Version = *version
+	spec.OS = *binOS
+	spec.Arch = *binArch
+	return spec, nil
 }

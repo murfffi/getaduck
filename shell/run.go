@@ -1,3 +1,4 @@
+// Package shell implements the getaduck CLI in a way which is embeddable in other programs
 package shell
 
 import (
@@ -7,11 +8,14 @@ import (
 	"github.com/murfffi/getaduck/download"
 )
 
+// Run executes getaduck
 func Run() {
-	outFileName, err := download.Do(download.DefaultSpec())
+	spec := download.DefaultSpec()
+	res, err := download.Do(spec)
 	if err != nil {
 		log.Fatalf("download failed: %v", err)
 	}
+	outFileName := res.OutputFile
 	absPath, err := filepath.Abs(outFileName)
 	if err != nil {
 		absPath = outFileName

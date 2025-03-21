@@ -9,8 +9,8 @@ import (
 )
 
 func TestDo(t *testing.T) {
-	outFileName, err := download.Do(download.DefaultSpec())
+	res, err := download.Do(download.DefaultSpec())
 	require.NoError(t, err)
-	require.FileExists(t, outFileName)
+	require.FileExists(t, res.OutputFile)
 
 }

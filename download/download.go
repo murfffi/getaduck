@@ -1,3 +1,4 @@
+// Package download implements downloading DuckDB releases as a library
 package download
 
 import (
@@ -27,7 +28,72 @@ const (
 	BinTypeCli
 )
 
-func getPath(spec Spec) string {
+type Spec struct {
+	// Type of binary to download (enum)
+	Type BinType
+
+	// DuckDB version, defaults to latest
+	Version string
+
+	// Target OS defaults to runtime.GOOS
+	OS string
+
+	// Target arch defaults to runtime.GOARCH
+	Arch string
+
+	// Overwrite forces downloading a file even if there is an existing appropriate in the working directory
+	// The definition of "appropriate" will evolve over time - for now, all existing files are accepted
+	Overwrite bool
+}
+
+func DefaultSpec() Spec {
+	return Spec{
+		Type:    BinTypeDynLib,
+		Version: LatestVersion,
+		OS:      runtime.GOOS,
+		Arch:    runtime.GOARCH,
+	}
+}
+
+type Result struct {
+	OutputFile string
+	// Download may be false if there was an existing appropriate file and Spec.Overwrite was false
+	// See Spec.Overwrite for details.
+	Downloaded bool
+}
+
+// Do downloads a DuckDB release
+func Do(spec Spec) (Result, error) {
+	res := Result{}
+	spec, err := normalizeSpec(spec)
+	if err != nil {
+		return res, err
+	}
+	entryName := getEntryName(spec)
+	res.OutputFile = entryName
+	if !spec.Overwrite && existsAppropriate(entryName) {
+		return res, nil
+	}
+	res.Downloaded = true
+	path := getGithubURL(spec)
+	tmpFile, err := fetchZip(path)
+	if err != nil {
+		return res, err
+	}
+	defer func() {
+		_ = os.Remove(tmpFile)
+	}()
+	return res, extractOne(tmpFile, entryName)
+}
+
+func existsAppropriate(fileName string) bool {
+	fi, err := os.Stat(fileName)
+	// the details of the error are not valuable in this context
+	// we will try to download and write the file if this fails
+	return err == nil && fi.Mode().IsRegular()
+}
+
+func getGithubURL(spec Spec) string {
 	var archivePrefix string
 	switch spec.Type {
 	case BinTypeCli:
@@ -38,30 +104,6 @@ func getPath(spec Spec) string {
 		panic("unhandled spec type")
 	}
 	return fmt.Sprintf("%s/download/%s/%s-%s-%s.zip", duckDbReleasesRoot, spec.Version, archivePrefix, spec.OS, spec.Arch)
-}
-
-type Spec struct {
-	Type    BinType
-	Version string
-	OS      string
-	Arch    string
-}
-
-func Do(spec Spec) (string, error) {
-	spec, err := normalizeSpec(spec)
-	if err != nil {
-		return "", err
-	}
-	path := getPath(spec)
-	tmpFile, err := fetchZip(path)
-	if err != nil {
-		return "", err
-	}
-	defer func() {
-		_ = os.Remove(tmpFile)
-	}()
-	entryName := getEntryName(spec)
-	return entryName, extractOne(tmpFile, entryName)
 }
 
 func normalizeSpec(spec Spec) (Spec, error) {
@@ -113,15 +155,6 @@ func getLatestVersionPath() (string, error) {
 	}
 	_ = resp.Body.Close()
 	return "", fmt.Errorf("redirect expected for %s but got code %d", latestUrl, resp.StatusCode)
-}
-
-func DefaultSpec() Spec {
-	return Spec{
-		Type:    BinTypeDynLib,
-		Version: LatestVersion,
-		OS:      runtime.GOOS,
-		Arch:    runtime.GOARCH,
-	}
 }
 
 func extractOne(zipFile string, name string) error {
@@ -194,13 +227,13 @@ func getCliName(targetOS string) string {
 	return name
 }
 
-func fetchZip(path string) (string, error) {
-	resp, err := http.Get(path)
+func fetchZip(url string) (string, error) {
+	resp, err := http.Get(url)
 	if err != nil {
-		return "", fmt.Errorf("failed to download %s: %w", path, err)
+		return "", genericDownloadErr(url, err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to download %s: %d", path, resp.StatusCode)
+		return "", fmt.Errorf("HTTP error when trying to download %s: %d", url, resp.StatusCode)
 	}
 	defer sclerr.CloseQuietly(resp.Body)
 	tmpZip, err := os.CreateTemp("", "getaduck")
@@ -210,7 +243,7 @@ func fetchZip(path string) (string, error) {
 	defer sclerr.CloseQuietly(tmpZip)
 	_, err = io.Copy(tmpZip, resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to download %s: %w", path, err)
+		return "", genericDownloadErr(url, err)
 	}
 	err = tmpZip.Close()
 	if err != nil {
@@ -218,4 +251,8 @@ func fetchZip(path string) (string, error) {
 	}
 
 	return tmpZip.Name(), nil
+}
+
+func genericDownloadErr(url string, err error) error {
+	return fmt.Errorf("failed to download %s: %w", url, err)
 }

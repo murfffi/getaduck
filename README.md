@@ -17,4 +17,22 @@ Use ```-help``` to see additional options
 
 ## Usage as a library
 
-TODO
+```go
+import (
+    "github.com/murfffi/getaduck"
+    "fmt"
+)
+
+func main() {
+    // Download the latest DuckDB release for your platform
+    duckdbPath, err := getaduck.Download(getaduck.Options{})
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println("Downloaded DuckDB to:", duckdbPath)
+}
+```
+
+## Contributing
+
+Contributions are welcome! Please fork the repository and open a pull request with your proposed changes. Make sure your code follows Go best practices. Bug reports and feature requests are also appreciated.

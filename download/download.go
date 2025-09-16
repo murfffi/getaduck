@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/ansel1/merry/v2"
-	"golang.org/x/mod/semver"
 
 	"github.com/murfffi/getaduck/internal/sclerr"
 )

@@ -8,7 +8,7 @@ import (
 )
 
 func TestRunArgs(t *testing.T) {
-	if !testing.Short() {
+	if testing.Short() {
 		t.Skip("skipping test that downloads from Github in short mode.")
 	}
 	t.Run("cli", func(t *testing.T) {

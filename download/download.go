@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/ansel1/merry/v2"
+	"golang.org/x/mod/semver"
 
 	"github.com/murfffi/getaduck/internal/sclerr"
 )
@@ -127,7 +128,11 @@ func normalizeSpec(spec Spec) (Spec, error) {
 		spec.Arch = "universal"
 	}
 
-	if spec.Arch == "arm64" {
+	if !semver.IsValid(spec.Version) && semver.IsValid("v"+spec.Version) {
+		spec.Version = "v" + spec.Version
+	}
+
+	if spec.Arch == "arm64" && semver.IsValid(spec.Version) && semver.Compare(spec.Version, "v1.3.0") < 0 {
 		spec.Arch = "aarch64"
 	}
 	return spec, err

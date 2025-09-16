@@ -18,18 +18,21 @@ Use ```-help``` to see additional options
 ## Usage as a library
 
 ```go
+package main
+
 import (
-    "github.com/murfffi/getaduck"
-    "fmt"
+	"fmt"
+
+	"github.com/murfffi/getaduck/download"
 )
 
 func main() {
-    // Download the latest DuckDB release for your platform
-    duckdbPath, err := getaduck.Download(getaduck.Options{})
-    if err != nil {
-        panic(err)
-    }
-    fmt.Println("Downloaded DuckDB to:", duckdbPath)
+	// Download the latest DuckDB release for your platform
+	res, err := download.Do(download.DefaultSpec())
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Downloaded DuckDB to:", res.OutputFile)
 }
 ```
 

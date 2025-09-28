@@ -3,8 +3,9 @@ module github.com/murfffi/getaduck
 go 1.24.7
 
 require (
-	github.com/ansel1/merry/v2 v2.2.1
-	github.com/stretchr/testify v1.8.3
+	github.com/ansel1/merry/v2 v2.2.2
+	github.com/murfffi/gorich v0.2.0
+	github.com/stretchr/testify v1.11.1
 	golang.org/x/mod v0.28.0
 )
 

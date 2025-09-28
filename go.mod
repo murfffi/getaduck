@@ -5,6 +5,7 @@ go 1.24.7
 require (
 	github.com/ansel1/merry/v2 v2.2.1
 	github.com/stretchr/testify v1.8.3
+	golang.org/x/mod v0.28.0
 )
 
 require (

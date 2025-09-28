@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/ansel1/merry/v2"
+	"golang.org/x/mod/semver"
 
 	"github.com/murfffi/getaduck/internal/sclerr"
 )
@@ -75,7 +76,7 @@ func Do(spec Spec) (Result, error) {
 		return res, nil
 	}
 	res.Downloaded = true
-	path := getGithubURL(spec)
+	path := getZipDownloadUrl(spec)
 	tmpFile, err := fetchZip(path)
 	if err != nil {
 		return res, err
@@ -83,7 +84,21 @@ func Do(spec Spec) (Result, error) {
 	defer func() {
 		_ = os.Remove(tmpFile)
 	}()
-	return res, extractOne(tmpFile, entryName)
+	return res, processZip(spec, entryName, tmpFile)
+}
+
+func processZip(spec Spec, entryName string, zipFile string) error {
+	if spec.Version != PreviewVersion {
+		return extractOne(zipFile, entryName)
+	}
+	return processPreviewZip(spec, entryName, zipFile)
+}
+
+func getZipDownloadUrl(spec Spec) string {
+	if spec.Version == PreviewVersion {
+		return getPreviewZipUrl(spec)
+	}
+	return getGithubURL(spec)
 }
 
 func existsAppropriate(fileName string) bool {

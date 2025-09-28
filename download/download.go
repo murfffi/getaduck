@@ -218,7 +218,10 @@ func extractFile(file *zip.File) error {
 	}
 	defer helperr.CloseQuietly(fileReader)
 	_, err = io.Copy(outFile, fileReader)
-	return err
+	if err != nil {
+		return err
+	}
+	return outFile.Close()
 }
 
 func getEntryName(spec Spec) string {

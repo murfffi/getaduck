@@ -14,7 +14,7 @@ import (
 	"github.com/ansel1/merry/v2"
 	"golang.org/x/mod/semver"
 
-	"github.com/murfffi/getaduck/internal/sclerr"
+	"github.com/murfffi/gorich/helperr"
 )
 
 const (
@@ -211,12 +211,12 @@ func extractFile(file *zip.File) error {
 	if err != nil {
 		return err
 	}
-	defer sclerr.CloseQuietly(outFile)
+	defer helperr.CloseQuietly(outFile)
 	fileReader, err := file.Open()
 	if err != nil {
 		return err
 	}
-	defer sclerr.CloseQuietly(fileReader)
+	defer helperr.CloseQuietly(fileReader)
 	_, err = io.Copy(outFile, fileReader)
 	return err
 }
@@ -259,12 +259,12 @@ func fetchZip(url string) (string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("HTTP error when trying to download %s: %d", url, resp.StatusCode)
 	}
-	defer sclerr.CloseQuietly(resp.Body)
+	defer helperr.CloseQuietly(resp.Body)
 	tmpZip, err := os.CreateTemp("", "getaduck")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
-	defer sclerr.CloseQuietly(tmpZip)
+	defer helperr.CloseQuietly(tmpZip)
 	_, err = io.Copy(tmpZip, resp.Body)
 	if err != nil {
 		return "", genericDownloadErr(url, err)

@@ -76,7 +76,7 @@ func Do(spec Spec) (Result, error) {
 		return res, nil
 	}
 	res.Downloaded = true
-	path := getGithubURL(spec)
+	path := getZipDownloadUrl(spec)
 	tmpFile, err := fetchZip(path)
 	if err != nil {
 		return res, err
@@ -84,7 +84,21 @@ func Do(spec Spec) (Result, error) {
 	defer func() {
 		_ = os.Remove(tmpFile)
 	}()
-	return res, extractOne(tmpFile, entryName)
+	return res, processZip(spec, entryName, tmpFile)
+}
+
+func processZip(spec Spec, entryName string, zipFile string) error {
+	if spec.Version != PreviewVersion {
+		return extractOne(zipFile, entryName)
+	}
+	return processPreviewZip(spec, entryName, zipFile)
+}
+
+func getZipDownloadUrl(spec Spec) string {
+	if spec.Version == PreviewVersion {
+		return getPreviewZipUrl(spec)
+	}
+	return getGithubURL(spec)
 }
 
 func existsAppropriate(fileName string) bool {
@@ -95,16 +109,21 @@ func existsAppropriate(fileName string) bool {
 }
 
 func getGithubURL(spec Spec) string {
-	var archivePrefix string
-	switch spec.Type {
+	archivePrefix := getPrefixByType(spec.Type)
+	return fmt.Sprintf("%s/download/%s/%s-%s-%s.zip", duckDbReleasesRoot, spec.Version, archivePrefix, spec.OS, spec.Arch)
+}
+
+func getPrefixByType(typ BinType) string {
+	var prefix string
+	switch typ {
 	case BinTypeCli:
-		archivePrefix = "duckdb_cli"
+		prefix = "duckdb_cli"
 	case BinTypeDynLib:
-		archivePrefix = "libduckdb"
+		prefix = "libduckdb"
 	default:
 		panic("unhandled spec type")
 	}
-	return fmt.Sprintf("%s/download/%s/%s-%s-%s.zip", duckDbReleasesRoot, spec.Version, archivePrefix, spec.OS, spec.Arch)
+	return prefix
 }
 
 func normalizeSpec(spec Spec) (Spec, error) {

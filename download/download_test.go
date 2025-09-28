@@ -17,6 +17,7 @@ func TestDo(t *testing.T) {
 			"v1.3.2",
 			"v1.4.0",
 			"latest",
+			"preview",
 		} {
 			t.Run(version, func(t *testing.T) {
 				for _, arch := range []string{

@@ -3,6 +3,8 @@ package download
 import (
 	"fmt"
 	"os"
+
+	"github.com/ansel1/merry/v2"
 )
 
 const (
@@ -24,12 +26,16 @@ func processPreviewZip(spec Spec, entryName string, zipFile string) error {
 	innerZip := getInnerZipName(spec)
 	err := extractOne(zipFile, innerZip)
 	if err != nil {
-		return err
+		return merry.Wrap(fmt.Errorf("failed to extract inner zip '%s' from '%s': %w", innerZip, zipFile, err))
 	}
 	defer func() {
 		_ = os.Remove(innerZip)
 	}()
-	return extractOne(innerZip, entryName)
+	err = extractOne(innerZip, entryName)
+	if err != nil {
+		return merry.Wrap(fmt.Errorf("failed to extract entry '%s' from inner zip '%s': %w", entryName, innerZip, err))
+	}
+	return nil
 }
 
 func getInnerZipName(spec Spec) string {
@@ -39,13 +45,7 @@ func getInnerZipName(spec Spec) string {
 	// libduckdb-windows-amd64.zip
 	// duckdb_cli-linux-amd64.zip
 	// libduckdb-linux-amd64.zip
-	prefix := ""
-	switch spec.Type {
-	case BinTypeCli:
-		prefix = "duckdb_cli"
-	case BinTypeDynLib:
-		prefix = "libduckdb"
-	}
+	prefix := getPrefixByType(spec.Type)
 	// For osx, spec.Arch has been normalized to universal in normalizeSpec
 	return fmt.Sprintf("%s-%s-%s.zip", prefix, spec.OS, spec.Arch)
 }

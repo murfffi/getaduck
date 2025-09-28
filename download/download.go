@@ -109,16 +109,21 @@ func existsAppropriate(fileName string) bool {
 }
 
 func getGithubURL(spec Spec) string {
-	var archivePrefix string
-	switch spec.Type {
+	archivePrefix := getPrefixByType(spec.Type)
+	return fmt.Sprintf("%s/download/%s/%s-%s-%s.zip", duckDbReleasesRoot, spec.Version, archivePrefix, spec.OS, spec.Arch)
+}
+
+func getPrefixByType(typ BinType) string {
+	var prefix string
+	switch typ {
 	case BinTypeCli:
-		archivePrefix = "duckdb_cli"
+		prefix = "duckdb_cli"
 	case BinTypeDynLib:
-		archivePrefix = "libduckdb"
+		prefix = "libduckdb"
 	default:
 		panic("unhandled spec type")
 	}
-	return fmt.Sprintf("%s/download/%s/%s-%s-%s.zip", duckDbReleasesRoot, spec.Version, archivePrefix, spec.OS, spec.Arch)
+	return prefix
 }
 
 func normalizeSpec(spec Spec) (Spec, error) {

@@ -244,11 +244,19 @@ func getCliName(targetOS string) string {
 	return name
 }
 
+type httpClient interface {
+	Get(url string) (resp *http.Response, err error)
+}
+
 func fetchZip(url string, useEtag bool) (string, error) {
+	return fetchZipWithClient(url, useEtag, http.DefaultClient)
+}
+
+func fetchZipWithClient(url string, useEtag bool, client httpClient) (string, error) {
 	// It *may* be more efficient (for whom?) to issue a HEAD request first for the ETag and Content-Length.
 	// We can't use If-None-Match because we don't know in advance which cached file is for which spec.
 	// We could encode the entire spec in the cached file name but the complexity would not be worth it.
-	resp, err := http.Get(url)
+	resp, err := client.Get(url)
 	if err != nil {
 		return "", genericDownloadErr(url, err)
 	}
@@ -259,7 +267,7 @@ func fetchZip(url string, useEtag bool) (string, error) {
 	contentLength := resp.ContentLength
 	defer helperr.CloseQuietly(resp.Body)
 	var tmpZip *os.File
-	if !useEtag && etagHeader != "" {
+	if !useEtag || etagHeader == "" {
 		tmpZip, err = os.CreateTemp("", "getaduck")
 	} else {
 		// ETag may contain chars not allowed in filenames.
@@ -275,16 +283,19 @@ func fetchZip(url string, useEtag bool) (string, error) {
 		tmpZip, err = os.Create(fileName)
 	}
 	if err != nil {
-		return "", fmt.Errorf("failed to create temp file: %w", err)
+		return "", merry.Wrap(fmt.Errorf("failed to create temp file: %w", err))
 	}
 	defer helperr.CloseQuietly(tmpZip)
+	if resp.Body == nil {
+		return "", merry.Wrap(fmt.Errorf("no response body available"))
+	}
 	_, err = io.Copy(tmpZip, resp.Body)
 	if err != nil {
 		return "", genericDownloadErr(url, err)
 	}
 	err = tmpZip.Close()
 	if err != nil {
-		return "", fmt.Errorf("failed to close temp file: %w", err)
+		return "", merry.Wrap(fmt.Errorf("failed to close temp file: %w", err))
 	}
 
 	return tmpZip.Name(), nil

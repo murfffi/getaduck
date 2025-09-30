@@ -4,8 +4,6 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/go-errors/errors v1.1.1 h1:ljK/pL5ltg3qoN+OtN6yCv9HWSfMwxSx90GJCZQxYNg=
 github.com/go-errors/errors v1.1.1/go.mod h1:psDX2osz5VnTOnFWbDeWwS7yejl+uV3FEWEp4lssFEs=
-github.com/murfffi/gorich v0.2.0 h1:eUQ2xzjp7czPemnc0nSEDVBLz2xyFKfQg2kSgJ9ljwk=
-github.com/murfffi/gorich v0.2.0/go.mod h1:o1VsmtwZ9U/E8eyiLvhUTOdV810J8v6Y0R3pi/97TdQ=
 github.com/murfffi/gorich v0.2.1 h1:YKUnllpO54KMGomcTBKb8K3zLFxFZT9soEFckf7wkSU=
 github.com/murfffi/gorich v0.2.1/go.mod h1:o1VsmtwZ9U/E8eyiLvhUTOdV810J8v6Y0R3pi/97TdQ=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=

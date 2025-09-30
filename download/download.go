@@ -3,6 +3,7 @@ package download
 
 import (
 	"archive/zip"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -261,7 +262,9 @@ func fetchZip(url string, useEtag bool) (string, error) {
 	if !useEtag && etagHeader != "" {
 		tmpZip, err = os.CreateTemp("", "getaduck")
 	} else {
-		fileName := fmt.Sprintf("getaduck.zip.etag_%s", etagHeader)
+		// ETag may contain chars not allowed in filenames.
+		safeEtag := base64.URLEncoding.EncodeToString([]byte(etagHeader))
+		fileName := fmt.Sprintf("getaduck.zip.etagbase64_%s", safeEtag)
 		fileName = filepath.Join(os.TempDir(), fileName)
 		if info, statErr := os.Stat(fileName); statErr == nil {
 			if info.Size() == contentLength {

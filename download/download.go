@@ -3,11 +3,12 @@ package download
 
 import (
 	"archive/zip"
-	"errors"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -18,8 +19,8 @@ import (
 )
 
 const (
-	LatestVersion      = "latest"
-	duckDbReleasesRoot = "https://github.com/duckdb/duckdb/releases"
+	LatestVersion  = "latest"
+	PreviewVersion = "preview"
 )
 
 type BinType int
@@ -29,38 +30,67 @@ const (
 	BinTypeCli
 )
 
+// Prefix is found in the beginning of some archive and file names in DuckDB packages
+func (typ BinType) Prefix() string {
+	var prefix string
+	switch typ {
+	case BinTypeCli:
+		prefix = "duckdb_cli"
+	case BinTypeDynLib:
+		prefix = "libduckdb"
+	default:
+		panic("unhandled spec type")
+	}
+	return prefix
+}
+
+// Spec defines the desired DuckDB binary and download options
+// Use DefaultSpec() to get a recommended configuration. The zero value is also valid.
 type Spec struct {
 	// Type of binary to download (enum)
 	Type BinType
 
 	// DuckDB version, defaults to latest
+	// Supported values are either plain semantic version with optional 'v' prefix - e.g. 1.2.2, v1.3.2,
+	// or "latest" - latest release version
+	// or "preview" - latest preview version from https://duckdb.org/docs/installation/?version=main
 	Version string
 
-	// Target OS defaults to runtime.GOOS
+	// Target OS, defaults to runtime.GOOS
 	OS string
 
-	// Target arch defaults to runtime.GOARCH
+	// Target arch defaults, to runtime.GOARCH
 	Arch string
 
-	// Overwrite forces downloading a file even if there is an existing appropriate in the working directory
-	// The definition of "appropriate" will evolve over time - for now, all existing files are accepted
+	// CacheDownload enables caching the bundle downloaded from the Internet in the temp directory,
+	// if the server supports it by exposing Etag and Content-Length headers.
+	// CacheDownload is independent of the Overwrite setting.
+	CacheDownload bool
+
+	// Overwrite forces overwriting the final file even if there is an existing appropriate in the working directory
+	// The definition of "appropriate" will evolve over time - for now, all existing files are accepted.
 	Overwrite bool
 }
 
+// DefaultSpec creates a recommended spec for downloading releases
+// The zero-value of Spec is also a valid configuration.
+// NB: Changes to the default spec are not considered breaking changes and may happen in a
+// minor release. They won't happen in patch releases.
 func DefaultSpec() Spec {
 	return Spec{
-		Type:    BinTypeDynLib,
-		Version: LatestVersion,
-		OS:      runtime.GOOS,
-		Arch:    runtime.GOARCH,
+		Type:          BinTypeDynLib,
+		Version:       LatestVersion,
+		CacheDownload: true,
+		OS:            runtime.GOOS,
+		Arch:          runtime.GOARCH,
 	}
 }
 
 type Result struct {
 	OutputFile string
-	// Download may be false if there was an existing appropriate file and Spec.Overwrite was false
+	// OutputWritten may be false if there was an existing appropriate file and Spec.Overwrite was false
 	// See Spec.Overwrite for details.
-	Downloaded bool
+	OutputWritten bool
 }
 
 // Do downloads a DuckDB release
@@ -75,15 +105,17 @@ func Do(spec Spec) (Result, error) {
 	if !spec.Overwrite && existsAppropriate(entryName) {
 		return res, nil
 	}
-	res.Downloaded = true
+	res.OutputWritten = true
 	path := getZipDownloadUrl(spec)
-	tmpFile, err := fetchZip(path)
+	tmpFile, err := fetchZip(path, spec.CacheDownload)
 	if err != nil {
 		return res, err
 	}
-	defer func() {
-		_ = os.Remove(tmpFile)
-	}()
+	if !spec.CacheDownload {
+		defer func() {
+			_ = os.Remove(tmpFile)
+		}()
+	}
 	return res, processZip(spec, entryName, tmpFile)
 }
 
@@ -106,24 +138,6 @@ func existsAppropriate(fileName string) bool {
 	// the details of the error are not valuable in this context
 	// we will try to download and write the file if this fails
 	return err == nil && fi.Mode().IsRegular()
-}
-
-func getGithubURL(spec Spec) string {
-	archivePrefix := getPrefixByType(spec.Type)
-	return fmt.Sprintf("%s/download/%s/%s-%s-%s.zip", duckDbReleasesRoot, spec.Version, archivePrefix, spec.OS, spec.Arch)
-}
-
-func getPrefixByType(typ BinType) string {
-	var prefix string
-	switch typ {
-	case BinTypeCli:
-		prefix = "duckdb_cli"
-	case BinTypeDynLib:
-		prefix = "libduckdb"
-	default:
-		panic("unhandled spec type")
-	}
-	return prefix
 }
 
 func normalizeSpec(spec Spec) (Spec, error) {
@@ -155,30 +169,6 @@ func normalizeSpec(spec Spec) (Spec, error) {
 		spec.Arch = "aarch64"
 	}
 	return spec, err
-}
-
-func getLatestVersionPath() (string, error) {
-	redirectErr := errors.New("redirect")
-	client := http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return redirectErr
-		},
-	}
-	const latestUrl = duckDbReleasesRoot + "/latest"
-	resp, err := client.Head(latestUrl)
-	if errors.Is(err, redirectErr) {
-		location := resp.Header.Get("Location")
-		prefix := duckDbReleasesRoot + "/tag/"
-		if !strings.HasPrefix(location, prefix) {
-			return "", fmt.Errorf("unexpected release redirect location: %s", location)
-		}
-		return location[len(prefix):], nil
-	}
-	if err != nil {
-		return "", fmt.Errorf("HEAD failed for %s: %w", latestUrl, err)
-	}
-	_ = resp.Body.Close()
-	return "", fmt.Errorf("redirect expected for %s but got code %d", latestUrl, resp.StatusCode)
 }
 
 func extractOne(zipFile string, name string) error {
@@ -254,7 +244,10 @@ func getCliName(targetOS string) string {
 	return name
 }
 
-func fetchZip(url string) (string, error) {
+func fetchZip(url string, useEtag bool) (string, error) {
+	// It *may* be more efficient (for whom?) to issue a HEAD request first for the ETag and Content-Length.
+	// We can't use If-None-Match because we don't know in advance which cached file is for which spec.
+	// We could encode the entire spec in the cached file name but the complexity would not be worth it.
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", genericDownloadErr(url, err)
@@ -262,8 +255,25 @@ func fetchZip(url string) (string, error) {
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("HTTP error when trying to download %s: %d", url, resp.StatusCode)
 	}
+	etagHeader := resp.Header.Get("ETag")
+	contentLength := resp.ContentLength
 	defer helperr.CloseQuietly(resp.Body)
-	tmpZip, err := os.CreateTemp("", "getaduck")
+	var tmpZip *os.File
+	if !useEtag && etagHeader != "" {
+		tmpZip, err = os.CreateTemp("", "getaduck")
+	} else {
+		// ETag may contain chars not allowed in filenames.
+		safeEtag := base64.URLEncoding.EncodeToString([]byte(etagHeader))
+		fileName := fmt.Sprintf("getaduck.zip.etagbase64_%s", safeEtag)
+		fileName = filepath.Join(os.TempDir(), fileName)
+		if info, statErr := os.Stat(fileName); statErr == nil {
+			if info.Size() == contentLength {
+				return fileName, nil
+			}
+		}
+
+		tmpZip, err = os.Create(fileName)
+	}
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}

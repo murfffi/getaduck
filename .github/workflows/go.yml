@@ -13,17 +13,44 @@ jobs:
 
   go-tests:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: [1.24.x, 1.25.x]
 
     steps:
     - uses: actions/checkout@v4
 
     - name: Set up Go
-      uses: actions/setup-go@v5.3.0
+      uses: actions/setup-go@v5
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version: "1.24.x"
 
+    - name: Run
+      run: |
+        go build -v .
+        ./getaduck
     - name: Test
-      run: go test -v -vet=all ./...
+      run: |
+        sudo apt-get install moreutils -y
+        make test
+    - name: Checks
+      run: |
+        make checks
+
+  other-go:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: [1.25.x]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Run
+        run: |
+          go build -v .
+          ./getaduck
+      - name: Test
+        run: make short-test

@@ -7,9 +7,7 @@ import (
 	"github.com/ansel1/merry/v2"
 )
 
-const (
-	PreviewVersion = "preview"
-)
+// Downloading preview releases
 
 func getPreviewZipUrl(spec Spec) string {
 	// https://artifacts.duckdb.org/latest/duckdb-binaries-osx.zip
@@ -45,7 +43,6 @@ func getInnerZipName(spec Spec) string {
 	// libduckdb-windows-amd64.zip
 	// duckdb_cli-linux-amd64.zip
 	// libduckdb-linux-amd64.zip
-	prefix := getPrefixByType(spec.Type)
 	// For osx, spec.Arch has been normalized to universal in normalizeSpec
-	return fmt.Sprintf("%s-%s-%s.zip", prefix, spec.OS, spec.Arch)
+	return fmt.Sprintf("%s-%s-%s.zip", spec.Type.Prefix(), spec.OS, spec.Arch)
 }

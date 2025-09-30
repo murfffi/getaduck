@@ -9,7 +9,7 @@ import (
 
 func TestDo(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skipping test that downloads from Github in short mode.")
+		t.Skip("skipping test that downloads from the Internet in short mode.")
 	}
 	t.Run("default lib", func(t *testing.T) {
 		for _, version := range []string{
@@ -29,6 +29,7 @@ func TestDo(t *testing.T) {
 						spec.Version = version
 						spec.Arch = arch
 						spec.Overwrite = true
+						spec.CacheDownload = true
 						res, err := download.Do(spec)
 						require.NoError(t, err)
 						require.FileExists(t, res.OutputFile)

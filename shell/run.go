@@ -26,7 +26,11 @@ func RunArgs(args []string, onError flag.ErrorHandling) error {
 	if err != nil {
 		absPath = outFileName
 	}
-	log.Print("downloaded: ", absPath)
+	if res.OutputWritten {
+		log.Print("downloaded: ", absPath)
+	} else {
+		log.Print("already exists: ", absPath)
+	}
 	return nil
 }
 
@@ -40,6 +44,7 @@ func parseSpec(args []string, onError flag.ErrorHandling) (download.Spec, error)
 	version := fs.String("version", spec.Version, "DuckDB version")
 	binOS := fs.String("os", spec.OS, "target OS")
 	binArch := fs.String("arch", spec.Arch, "target architecture")
+	binOverwrite := fs.Bool("overwrite", true, "overwrite existing file")
 	if err := fs.Parse(args[1:]); err != nil {
 		return download.Spec{}, err
 	}
@@ -48,5 +53,6 @@ func parseSpec(args []string, onError flag.ErrorHandling) (download.Spec, error)
 	spec.Version = *version
 	spec.OS = *binOS
 	spec.Arch = *binArch
+	spec.Overwrite = *binOverwrite
 	return spec, nil
 }
